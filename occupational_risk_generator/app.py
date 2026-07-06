@@ -26,8 +26,37 @@ FIELD_LABELS = {
     "health_case_id": "健康編號",
     "health_basis": "健康評估依據",
     "senior_assessment": "中高齡評估",
+    "work_ability_level": "中高齡工作適能等級",
+    "medical_follow_up": "評估結果",
+    "work_fitness_options": "工作適性建議",
+    "work_fitness_detail": "工作適性詳述",
     "notes": "補充說明",
 }
+
+
+WORK_ABILITY_MEANINGS = {
+    "弱": "不能勝任工作要求",
+    "普通": "工作適能有待提高",
+    "良": "能勝任所從事的工作",
+    "優": "能很好地勝任所從事的工作",
+}
+
+MEDICAL_FOLLOW_UP_OPTIONS = [
+    "正常或不需要治療，可結案。",
+    "已診斷治療中，可結案。",
+    "已複診檢查及追蹤，可結案。",
+    "需進一步檢查及持續追蹤(項目)",
+    "自主管理，並於年度健檢追蹤。",
+    "需立即就醫治療",
+]
+
+WORK_FITNESS_OPTIONS = [
+    "適任原單位工作",
+    "進行工作調整",
+    "工作禁忌",
+    "工作限制",
+    "不適任",
+]
 
 
 def load_rules() -> dict:
@@ -109,6 +138,10 @@ def join_as_record_sentence(items: list[str]) -> str:
     if not cleaned:
         return ""
     return "；".join(cleaned) + "。"
+
+
+def strip_record_punctuation(text: str) -> str:
+    return text.strip().rstrip("。；;")
 
 
 def generate_recommendation(form_data: dict, rules_data: dict) -> tuple[str, list[dict]]:
@@ -227,10 +260,20 @@ def generate_appendix_record(form_data: dict, rules_data: dict) -> tuple[str, li
     health_level = normalize_text(form_data.get("health_level")) or "未分級"
     health_basis = normalize_text(form_data.get("health_basis"))
     senior_assessment = normalize_text(form_data.get("senior_assessment"))
+    work_ability_level = normalize_text(form_data.get("work_ability_level"))
+    medical_follow_up = normalize_text(form_data.get("medical_follow_up"))
+    work_fitness_options = normalize_text(form_data.get("work_fitness_options"))
+    work_fitness_detail = normalize_text(form_data.get("work_fitness_detail"))
     notes = normalize_text(form_data.get("notes"))
 
     basis_text = health_basis or f"依健康檢查結果及職護評估，目前健康管理分級為{health_level}，特殊健康風險註記為：{health_risks}。"
-    senior_text = senior_assessment or ""
+    senior_parts = []
+    if work_ability_level:
+        meaning = WORK_ABILITY_MEANINGS.get(work_ability_level, "")
+        senior_parts.append(f"中高齡工作適能指數為{work_ability_level}，{meaning}。")
+    if senior_assessment:
+        senior_parts.append(senior_assessment)
+    senior_text = " ".join(senior_parts)
 
     management_items = []
     environment_items = []
@@ -260,7 +303,18 @@ def generate_appendix_record(form_data: dict, rules_data: dict) -> tuple[str, li
     environment_text = join_as_record_sentence(environment_items)
     education_text = join_as_record_sentence(education_items)
     follow_up_text = join_as_record_sentence(follow_up_items)
-    fit_result = normalize_text(form_data.get("fit_result")) or f"現階段評估可勝任{department}{job_title}及原作業內容；惟仍應依健康管理分級、症狀變化及現場暴露情形持續追蹤，必要時再行評估其作業適配情形。"
+    fit_result = normalize_text(form_data.get("fit_result"))
+    if not fit_result:
+        selected_fitness = work_fitness_options or f"適任原單位工作"
+        fit_result = f"現階段評估為{selected_fitness}。"
+        if work_fitness_detail:
+            fit_result = f"{fit_result}{strip_record_punctuation(work_fitness_detail)}。"
+        elif "適任原單位工作" in selected_fitness:
+            fit_result = f"{fit_result}可勝任{department}{job_title}及原作業內容。"
+        else:
+            fit_result = f"{fit_result}建議依職護、醫師與事業單位評估結果，確認必要之工作調整、限制或後續追蹤事項。"
+    if medical_follow_up:
+        fit_result = f"{fit_result} 評估結果：{strip_record_punctuation(medical_follow_up)}。"
     health_guidance_result = f"已向個案說明{work_risks}對健康與作業安全之影響，並給予相關健康指導及改善建議。"
 
     parts = [
@@ -398,9 +452,17 @@ def main() -> None:
             with col3:
                 health_case_id = st.text_input("健康編號", placeholder="例如：115-04-15-01")
                 health_basis = st.text_area("健康評估依據", placeholder="例如：113 年度健康檢查第三級管理、血壓第二級管理。", height=80)
+                work_ability_level = st.selectbox(
+                    "中高齡工作適能等級",
+                    ["", "弱", "普通", "良", "優"],
+                    help="弱：不能勝任工作要求；普通：工作適能有待提高；良：能勝任所從事的工作；優：能很好地勝任所從事的工作。",
+                )
+                senior_assessment = st.text_area("中高齡評估補充", placeholder="例如：視力、聽力、認知、肌力皆正常。", height=70)
             with col4:
-                senior_assessment = st.text_area("中高齡評估", placeholder="例如：工作適能指數優；視力、聽力、認知、肌力皆正常。", height=80)
-                fit_result = st.text_area("適工性評估結果", placeholder="未填時會由系統依輸入內容產生一般性適工文字。", height=80)
+                medical_follow_up = st.multiselect("評估結果", MEDICAL_FOLLOW_UP_OPTIONS)
+                work_fitness_options = st.multiselect("工作適性建議", WORK_FITNESS_OPTIONS, default=["適任原單位工作"])
+                work_fitness_detail = st.text_area("工作適性詳述", placeholder="例如：可適任原職務工作；若症狀惡化，建議再行評估作業適配情形。", height=70)
+                fit_result = st.text_area("工作適性評估自訂文字", placeholder="若填寫此欄，會優先使用此文字。", height=70)
 
         submitted = st.form_submit_button("產生建議", type="primary")
 
@@ -420,6 +482,10 @@ def main() -> None:
             "health_case_id": health_case_id,
             "health_basis": health_basis,
             "senior_assessment": senior_assessment,
+            "work_ability_level": work_ability_level,
+            "medical_follow_up": medical_follow_up,
+            "work_fitness_options": work_fitness_options,
+            "work_fitness_detail": work_fitness_detail,
             "fit_result": fit_result,
             "notes": notes,
         }
