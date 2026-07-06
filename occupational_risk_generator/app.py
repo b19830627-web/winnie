@@ -100,6 +100,17 @@ def build_numbered_lines(items: list[str]) -> list[str]:
     return [f"{index}. {item}" for index, item in enumerate(items, start=1)]
 
 
+def join_as_record_sentence(items: list[str]) -> str:
+    cleaned = []
+    for item in items:
+        clean = item.strip().rstrip("。；;")
+        if clean:
+            cleaned.append(clean)
+    if not cleaned:
+        return ""
+    return "；".join(cleaned) + "。"
+
+
 def generate_recommendation(form_data: dict, rules_data: dict) -> tuple[str, list[dict]]:
     matched_rules = get_matched_rules(form_data, rules_data)
     context_notes = get_context_notes(form_data, rules_data)
@@ -179,16 +190,14 @@ def generate_appendix_record(form_data: dict, rules_data: dict) -> tuple[str, li
 
     if not matched_rules and not context_notes:
         message = rules_data["insufficient_data_message"]
-        intro = build_intro(form_data)
         return "\n\n".join(
             part
             for part in [
-                "附表八健康風險評估與適工追蹤紀錄",
-                intro,
-                f"(1)基本資料與作業特性\n{message}",
-                f"(2)健康評估與風險分析\n{message}",
-                f"(3)改善建議與採行措施\n{message}",
-                f"(4)適工評估與後續追蹤\n{message}",
+                "1.健康編號：未填",
+                f"(1)基本資料與作業特性\n1-1工作型態：{message}\n1-2作業特性：{message}",
+                f"(2)健康評估與風險分析\n2-1數據依據：{message}\n2-2風險重點：{message}",
+                f"(3)改善及建議採行措施\n3-1 管理建議：{message}\n3-2 環境建議：{message}\n3-3 教育指導：{message}",
+                f"(4)適性評估與後續追蹤\n4-1 健康指導結果： {message}\n4-2工作適性評估：{message}\n4-3 後續追蹤：{message}",
             ]
             if part
         ), matched_rules
@@ -210,10 +219,8 @@ def generate_appendix_record(form_data: dict, rules_data: dict) -> tuple[str, li
     follow_up_items = dedupe(follow_up_items + rules_data.get("default_follow_up", []))
 
     case_id = normalize_text(form_data.get("health_case_id")) or "未填"
-    company = normalize_text(form_data.get("company")) or "未填"
     department = normalize_text(form_data.get("department")) or "未填"
     job_title = normalize_text(form_data.get("job_title")) or "未填"
-    industry = normalize_text(form_data.get("industry")) or "未填"
     shift = normalize_text(form_data.get("shift")) or "未填"
     work_content = normalize_text(form_data.get("work_content")) or "未填"
     health_risks = normalize_text(form_data.get("health_risks")) or "無特殊健康風險註記"
@@ -223,7 +230,7 @@ def generate_appendix_record(form_data: dict, rules_data: dict) -> tuple[str, li
     notes = normalize_text(form_data.get("notes"))
 
     basis_text = health_basis or f"依健康檢查結果及職護評估，目前健康管理分級為{health_level}，特殊健康風險註記為：{health_risks}。"
-    senior_text = senior_assessment or "如屬中高齡勞工，建議依實際工作適能、視力、聽力、肌力、認知與慢性病控制情形補充評估。"
+    senior_text = senior_assessment or ""
 
     management_items = []
     environment_items = []
@@ -241,41 +248,40 @@ def generate_appendix_record(form_data: dict, rules_data: dict) -> tuple[str, li
         education_items.append("建議由職護提供個別健康指導，說明作業相關危害、症狀警訊與自我保護方式。")
 
     if notes:
-        risk_items.append(f"補充說明：{notes}。建議於臨場服務時進一步確認其與作業負荷及健康風險之關聯。")
+        clean_notes = notes.rstrip("。；;")
+        risk_items.append(f"補充說明：{clean_notes}。建議於臨場服務時進一步確認其與作業負荷及健康風險之關聯。")
 
     work_risks = "、".join(rule["label"] for rule in matched_rules) or "未明確辨識"
-    fit_result = normalize_text(form_data.get("fit_result")) or f"經本次評估，其健康狀況原則上可配合目前{shift}之{department}{job_title}作業；惟仍應依健康管理分級、症狀變化及現場暴露情形持續追蹤，必要時再行評估工作調整需求。"
+    data_basis = basis_text
+    if senior_text:
+        data_basis = f"{data_basis} {senior_text}"
+    risk_focus = join_as_record_sentence(risk_items)
+    management_text = join_as_record_sentence(management_items)
+    environment_text = join_as_record_sentence(environment_items)
+    education_text = join_as_record_sentence(education_items)
+    follow_up_text = join_as_record_sentence(follow_up_items)
+    fit_result = normalize_text(form_data.get("fit_result")) or f"現階段評估可勝任{department}{job_title}及原作業內容；惟仍應依健康管理分級、症狀變化及現場暴露情形持續追蹤，必要時再行評估其作業適配情形。"
+    health_guidance_result = f"已向個案說明{work_risks}對健康與作業安全之影響，並給予相關健康指導及改善建議。"
 
     parts = [
-        "附表八健康風險評估與適工追蹤紀錄",
-        f"健康編號：{case_id}",
+        f"1.健康編號：{case_id} （{department}）",
         "(1)基本資料與作業特性",
-        f"公司名稱：{company}",
-        f"產業別：{industry}",
-        f"部門／職務：{department}／{job_title}",
-        f"工作型態：{shift}。",
-        f"作業特性評估：主要作業內容包含{work_content}。依輸入資料辨識之潛在風險包含：{work_risks}。",
+        f"1-1工作型態： 擔任{job_title}，班別為{shift}，負責{work_content}。",
+        f"1-2作業特性： 該作業特性包含{work_risks}，需依現場作業內容、暴露因子及健康管理分級綜合評估其健康與安全風險。",
         "",
         "(2)健康評估與風險分析",
-        f"健康評估依據：{basis_text}",
-        f"中高齡評估：{senior_text}",
-        "風險分析：",
-        *[f"- {item}" for item in risk_items],
-        f"綜合評估：個案健康風險應與其作業型態、班別、暴露因子及健康管理分級一併判斷，並作為後續適工評估與健康管理追蹤之依據。",
+        f"2-1數據依據： {data_basis}",
+        f"2-2風險重點： {risk_focus}",
         "",
-        "(3)改善建議與採行措施",
-        "針對上述風險，分別從管理、環境、教育三大面向提出具體對策：",
-        "3-1 管理建議",
-        *build_numbered_lines(management_items),
-        "3-2 環境建議",
-        *build_numbered_lines(environment_items),
-        "3-3 教育指導",
-        *build_numbered_lines(education_items),
+        "(3)改善及建議採行措施",
+        f"3-1 管理建議：{management_text}",
+        f"3-2 環境建議： {environment_text}",
+        f"3-3 教育指導： {education_text}",
         "",
-        "(4)適工評估與後續追蹤",
-        f"(1)適工性評估結果：{fit_result}",
-        "(2)後續建議：",
-        *[f"- {item}" for item in follow_up_items],
+        "(4)適性評估與後續追蹤",
+        f"4-1 健康指導結果： {health_guidance_result}",
+        f"4-2工作適性評估：{fit_result}",
+        f"4-3 後續追蹤：{follow_up_text}",
     ]
 
     return "\n".join(parts), matched_rules
