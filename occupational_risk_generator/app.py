@@ -12,6 +12,7 @@ from docx.shared import Pt
 
 APP_TITLE = "特約職護職業安全風險評估產生器"
 RULES_PATH = Path(__file__).with_name("risk_rules.json")
+DEFAULT_ACCESS_PASSWORD = "666"
 
 
 FIELD_LABELS = {
@@ -57,6 +58,34 @@ WORK_FITNESS_OPTIONS = [
     "工作限制",
     "不適任",
 ]
+
+
+def get_access_password() -> str:
+    try:
+        return st.secrets.get("APP_PASSWORD", DEFAULT_ACCESS_PASSWORD)
+    except Exception:
+        return DEFAULT_ACCESS_PASSWORD
+
+
+def require_password() -> bool:
+    if st.session_state.get("authenticated"):
+        with st.sidebar:
+            st.success("已登入")
+            if st.button("登出"):
+                st.session_state["authenticated"] = False
+                st.rerun()
+        return True
+
+    st.title(APP_TITLE)
+    st.caption("請先輸入使用密碼。")
+    password = st.text_input("密碼", type="password")
+    if st.button("登入", type="primary"):
+        if password == get_access_password():
+            st.session_state["authenticated"] = True
+            st.rerun()
+        else:
+            st.error("密碼錯誤，請重新輸入。")
+    return False
 
 
 WORKPLACE_KEYWORDS = [
@@ -527,6 +556,9 @@ def copy_button(text: str) -> None:
 
 def main() -> None:
     st.set_page_config(page_title=APP_TITLE, page_icon="🩺", layout="wide")
+    if not require_password():
+        return
+
     rules_data = load_rules()
 
     st.title(APP_TITLE)
