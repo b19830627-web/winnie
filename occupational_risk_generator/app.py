@@ -439,7 +439,7 @@ def generate_appendix_record(form_data: dict, rules_data: dict) -> tuple[str, li
         f"1.健康編號：{case_id}",
         "(1)基本資料與作業特性",
         f"1-1 工作型態：擔任{job_title}，工作班別為{shift}。",
-        f"1-2 作業特性：主要作業內容為{work_content}，作業特性包含{work_risks}，需依實際作業姿勢、活動量、環境暴露及現場作業安排綜合評估其安全與健康風險。",
+        f"1-2 作業特性：主要作業內容為{work_content}，作業特性包含{work_risks}。",
         "",
         "(2)健康評估與風險分析",
         f"2-1 數據依據：{data_basis}",
