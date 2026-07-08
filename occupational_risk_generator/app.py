@@ -199,16 +199,32 @@ def build_data_basis(health_level: str, health_risks: str) -> str:
         level_text = health_level if health_level.startswith("健康管理") else f"健康管理{health_level}"
     else:
         level_text = "未提供健康管理分級"
-    risk_text = health_risks if health_risks and health_risks != "無" else "無特殊健康風險註記"
-    return f"{level_text}；主要風險類別：{risk_text}。"
+    if health_risks and health_risks not in ["無", "無特殊健康風險註記"]:
+        return f"{level_text}；主要風險類別：{health_risks}。"
+    return f"{level_text}。"
 
 
 def keep_workplace_item(item: str) -> bool:
     return any(keyword in item for keyword in WORKPLACE_KEYWORDS) and not any(keyword in item for keyword in MEDICAL_FOCUS_KEYWORDS)
 
 
+def normalize_role_wording(item: str) -> str:
+    replacements = {
+        "建議雇主與職護共同評估是否需調整工作負荷、班別、暴露時間或高風險作業安排": "建議事業單位依職護評估結果，檢視工作負荷、班別、暴露時間及高風險作業安排是否需調整",
+        "建議主管與職護共同評估工作負荷、休息安排與必要之工作調整": "建議主管依職護評估結果，檢視工作負荷、休息安排及必要之工作調整",
+        "建議雇主依醫師與職護建議": "建議事業單位依職護與醫師評估結果",
+        "建議雇主": "建議事業單位",
+    }
+    normalized = item
+    for old, new in replacements.items():
+        normalized = normalized.replace(old, new)
+    return normalized
+
+
 def build_workplace_management(items: list[str], work_risks: str, shift: str) -> str:
-    cleaned_items = [strip_record_punctuation(item) for item in items if keep_workplace_item(item)]
+    cleaned_items = [
+        normalize_role_wording(strip_record_punctuation(item)) for item in items if keep_workplace_item(item)
+    ]
     if work_risks and work_risks != "未明確辨識":
         cleaned_items.append(f"建議主管依{work_risks}檢視作業分派、休息頻率、輪替制度與工作負荷")
     if shift and shift not in ["未填", "日班"]:
@@ -402,7 +418,7 @@ def generate_appendix_record(form_data: dict, rules_data: dict) -> tuple[str, li
     if senior_text:
         risk_focus = f"{risk_focus}{senior_text}"
     management_text = build_workplace_management(management_items, work_risks, shift)
-    environment_text = join_as_record_sentence(environment_items)
+    environment_text = join_as_record_sentence([normalize_role_wording(item) for item in environment_items])
     education_text = build_workplace_education(education_items, work_risks)
     follow_up_text = build_workplace_follow_up(follow_up_items, work_risks, work_content, shift)
     fit_result = normalize_text(form_data.get("fit_result"))
