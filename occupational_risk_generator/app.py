@@ -391,7 +391,9 @@ def generate_appendix_record(form_data: dict, rules_data: dict) -> tuple[str, li
     management_items = []
     environment_items = []
     for item in improvement_items:
-        if any(keyword in item for keyword in ["工作檯", "物品", "設備", "通風", "遮陽", "補水點", "防護具", "推車", "升降台", "動線", "座椅", "螢幕", "鍵盤", "滑鼠", "環境", "配置"]):
+        if any(keyword in item for keyword in ["耳塞", "耳罩", "配戴方式", "保存狀況", "防護具尺寸"]):
+            management_items.append(item)
+        elif any(keyword in item for keyword in ["工作檯", "物品", "設備", "通風", "遮陽", "補水點", "防護具", "推車", "升降台", "動線", "座椅", "螢幕", "鍵盤", "滑鼠", "環境", "配置"]):
             environment_items.append(item)
         else:
             management_items.append(item)
