@@ -59,6 +59,56 @@ WORK_FITNESS_OPTIONS = [
 ]
 
 
+WORKPLACE_KEYWORDS = [
+    "作業",
+    "工作",
+    "現場",
+    "環境",
+    "人因",
+    "姿勢",
+    "動線",
+    "設備",
+    "輔具",
+    "防護具",
+    "通風",
+    "休息",
+    "工時",
+    "排班",
+    "輪班",
+    "疲勞",
+    "搬運",
+    "重量",
+    "頻率",
+    "暴露",
+    "高溫",
+    "噪音",
+    "粉塵",
+    "化學",
+    "交通",
+    "改善",
+    "通報",
+]
+
+MEDICAL_FOCUS_KEYWORDS = [
+    "就醫",
+    "回診",
+    "服藥",
+    "用藥",
+    "醫療",
+    "治療",
+    "醫師面談",
+    "檢查結果",
+    "健檢",
+    "健康管理",
+    "健康追蹤",
+    "血壓",
+    "血糖",
+    "血脂",
+]
+
+HEALTH_LABEL_KEYWORDS = ["高血壓", "血糖", "血脂", "肝功能", "貧血", "中高齡", "慢性病", "孕產婦", "健康管理"]
+
+
 def load_rules() -> dict:
     with RULES_PATH.open("r", encoding="utf-8") as file:
         return json.load(file)
@@ -144,6 +194,55 @@ def strip_record_punctuation(text: str) -> str:
     return text.strip().rstrip("。；;")
 
 
+def build_data_basis(health_level: str, health_risks: str) -> str:
+    if health_level and health_level != "未分級":
+        level_text = health_level if health_level.startswith("健康管理") else f"健康管理{health_level}"
+    else:
+        level_text = "未提供健康管理分級"
+    risk_text = health_risks if health_risks and health_risks != "無" else "無特殊健康風險註記"
+    return f"{level_text}；主要風險類別：{risk_text}。"
+
+
+def keep_workplace_item(item: str) -> bool:
+    return any(keyword in item for keyword in WORKPLACE_KEYWORDS) and not any(keyword in item for keyword in MEDICAL_FOCUS_KEYWORDS)
+
+
+def build_workplace_management(items: list[str], work_risks: str, shift: str) -> str:
+    cleaned_items = [strip_record_punctuation(item) for item in items if keep_workplace_item(item)]
+    if work_risks and work_risks != "未明確辨識":
+        cleaned_items.append(f"建議主管依{work_risks}檢視作業分派、休息頻率、輪替制度與工作負荷")
+    if shift and shift not in ["未填", "日班"]:
+        cleaned_items.append(f"針對{shift}人員建立疲勞風險辨識、交接班確認與異常狀況通報機制")
+    return join_as_record_sentence(dedupe(cleaned_items))
+
+
+def build_workplace_education(items: list[str], work_risks: str) -> str:
+    cleaned_items = [strip_record_punctuation(item) for item in items if keep_workplace_item(item)]
+    if work_risks and work_risks != "未明確辨識":
+        cleaned_items.append(f"教育個案辨識{work_risks}相關作業危害，工作中若出現明顯不適、注意力下降或動作控制受影響，應暫停高風險作業並通報主管或職護")
+    cleaned_items.append("指導依實際作業姿勢執行伸展、補水、休息與防護具正確使用，以降低職業傷害風險")
+    return join_as_record_sentence(dedupe(cleaned_items))
+
+
+def build_workplace_follow_up(follow_up_items: list[str], work_risks: str, work_content: str, shift: str) -> str:
+    cleaned_items = []
+    for item in follow_up_items:
+        clean = strip_record_punctuation(item)
+        if not clean:
+            continue
+        if keep_workplace_item(clean):
+            cleaned_items.append(clean)
+
+    if work_risks and work_risks != "未明確辨識":
+        cleaned_items.append(f"建議於下次臨場服務追蹤{work_risks}相關作業安排、環境改善與人因工程調整成效")
+    if work_content and work_content != "未填":
+        cleaned_items.append(f"持續確認{work_content}之實際作業負荷、動線配置及休息安排是否符合現場需求")
+    if shift and shift not in ["未填", "日班"]:
+        cleaned_items.append(f"追蹤{shift}之工時安排、疲勞累積與交接班制度對作業安全之影響")
+
+    return join_as_record_sentence(dedupe(cleaned_items))
+
+
 def generate_recommendation(form_data: dict, rules_data: dict) -> tuple[str, list[dict]]:
     matched_rules = get_matched_rules(form_data, rules_data)
     context_notes = get_context_notes(form_data, rules_data)
@@ -227,10 +326,10 @@ def generate_appendix_record(form_data: dict, rules_data: dict) -> tuple[str, li
             part
             for part in [
                 "1.健康編號：未填",
-                f"(1)基本資料與作業特性\n1-1工作型態：{message}\n1-2作業特性：{message}",
-                f"(2)健康評估與風險分析\n2-1數據依據：{message}\n2-2風險重點：{message}",
+                f"(1)基本資料與作業特性\n1-1 工作型態：{message}\n1-2 作業特性：{message}",
+                f"(2)健康評估與風險分析\n2-1 數據依據：{message}\n2-2 風險重點：{message}",
                 f"(3)改善及建議採行措施\n3-1 管理建議：{message}\n3-2 環境建議：{message}\n3-3 教育指導：{message}",
-                f"(4)適性評估與後續追蹤\n4-1 健康指導結果： {message}\n4-2工作適性評估：{message}\n4-3 後續追蹤：{message}",
+                f"(4)適性評估與後續追蹤\n4-1 健康指導結果：{message}\n4-2 工作適性評估：{message}\n4-3 後續追蹤：{message}",
             ]
             if part
         ), matched_rules
@@ -249,7 +348,7 @@ def generate_appendix_record(form_data: dict, rules_data: dict) -> tuple[str, li
     risk_items = dedupe(risk_items)
     education_items = dedupe(education_items)
     improvement_items = dedupe(improvement_items)
-    follow_up_items = dedupe(follow_up_items + rules_data.get("default_follow_up", []))
+    follow_up_items = dedupe(follow_up_items)
 
     case_id = normalize_text(form_data.get("health_case_id")) or "未填"
     department = normalize_text(form_data.get("department")) or "未填"
@@ -258,7 +357,6 @@ def generate_appendix_record(form_data: dict, rules_data: dict) -> tuple[str, li
     work_content = normalize_text(form_data.get("work_content")) or "未填"
     health_risks = normalize_text(form_data.get("health_risks")) or "無特殊健康風險註記"
     health_level = normalize_text(form_data.get("health_level")) or "未分級"
-    health_basis = normalize_text(form_data.get("health_basis"))
     senior_assessment = normalize_text(form_data.get("senior_assessment"))
     work_ability_level = normalize_text(form_data.get("work_ability_level"))
     medical_follow_up = normalize_text(form_data.get("medical_follow_up"))
@@ -266,7 +364,6 @@ def generate_appendix_record(form_data: dict, rules_data: dict) -> tuple[str, li
     work_fitness_detail = normalize_text(form_data.get("work_fitness_detail"))
     notes = normalize_text(form_data.get("notes"))
 
-    basis_text = health_basis or f"依健康檢查結果及職護評估，目前健康管理分級為{health_level}，特殊健康風險註記為：{health_risks}。"
     senior_parts = []
     if work_ability_level:
         meaning = WORK_ABILITY_MEANINGS.get(work_ability_level, "")
@@ -294,15 +391,20 @@ def generate_appendix_record(form_data: dict, rules_data: dict) -> tuple[str, li
         clean_notes = notes.rstrip("。；;")
         risk_items.append(f"補充說明：{clean_notes}。建議於臨場服務時進一步確認其與作業負荷及健康風險之關聯。")
 
-    work_risks = "、".join(rule["label"] for rule in matched_rules) or "未明確辨識"
-    data_basis = basis_text
-    if senior_text:
-        data_basis = f"{data_basis} {senior_text}"
+    matched_labels = [rule["label"] for rule in matched_rules]
+    exposure_labels = [
+        label for label in matched_labels if not any(keyword in label for keyword in HEALTH_LABEL_KEYWORDS)
+    ]
+    all_risks = "、".join(matched_labels) or "未明確辨識"
+    work_risks = "、".join(exposure_labels) or (work_content if work_content != "未填" else "未明確辨識")
+    data_basis = build_data_basis(health_level, health_risks)
     risk_focus = join_as_record_sentence(risk_items)
-    management_text = join_as_record_sentence(management_items)
+    if senior_text:
+        risk_focus = f"{risk_focus}{senior_text}"
+    management_text = build_workplace_management(management_items, work_risks, shift)
     environment_text = join_as_record_sentence(environment_items)
-    education_text = join_as_record_sentence(education_items)
-    follow_up_text = join_as_record_sentence(follow_up_items)
+    education_text = build_workplace_education(education_items, work_risks)
+    follow_up_text = build_workplace_follow_up(follow_up_items, work_risks, work_content, shift)
     fit_result = normalize_text(form_data.get("fit_result"))
     if not fit_result:
         selected_fitness = work_fitness_options or f"適任原單位工作"
@@ -315,17 +417,17 @@ def generate_appendix_record(form_data: dict, rules_data: dict) -> tuple[str, li
             fit_result = f"{fit_result}建議依職護、醫師與事業單位評估結果，確認必要之工作調整、限制或後續追蹤事項。"
     if medical_follow_up:
         fit_result = f"{fit_result} 評估結果：{strip_record_punctuation(medical_follow_up)}。"
-    health_guidance_result = f"已向個案說明{work_risks}對健康與作業安全之影響，並給予相關健康指導及改善建議。"
+    health_guidance_result = f"已向個案說明{all_risks}對健康與作業安全之影響，並給予與作業風險相關之健康指導及改善建議。"
 
     parts = [
-        f"1.健康編號：{case_id} （{department}）",
+        f"1.健康編號：{case_id}",
         "(1)基本資料與作業特性",
-        f"1-1工作型態： 擔任{job_title}，班別為{shift}，負責{work_content}。",
-        f"1-2作業特性： 該作業特性包含{work_risks}，需依現場作業內容、暴露因子及健康管理分級綜合評估其健康與安全風險。",
+        f"1-1 工作型態：擔任{job_title}，工作班別為{shift}。",
+        f"1-2 作業特性：主要作業內容為{work_content}，作業特性包含{work_risks}，需依實際作業姿勢、活動量、環境暴露及現場作業安排綜合評估其安全與健康風險。",
         "",
         "(2)健康評估與風險分析",
-        f"2-1數據依據： {data_basis}",
-        f"2-2風險重點： {risk_focus}",
+        f"2-1 數據依據：{data_basis}",
+        f"2-2 風險重點：{risk_focus}",
         "",
         "(3)改善及建議採行措施",
         f"3-1 管理建議：{management_text}",
@@ -333,8 +435,8 @@ def generate_appendix_record(form_data: dict, rules_data: dict) -> tuple[str, li
         f"3-3 教育指導： {education_text}",
         "",
         "(4)適性評估與後續追蹤",
-        f"4-1 健康指導結果： {health_guidance_result}",
-        f"4-2工作適性評估：{fit_result}",
+        f"4-1 健康指導結果：{health_guidance_result}",
+        f"4-2 工作適性評估：{fit_result}",
         f"4-3 後續追蹤：{follow_up_text}",
     ]
 
