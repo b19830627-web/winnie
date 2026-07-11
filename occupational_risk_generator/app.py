@@ -216,16 +216,49 @@ def build_numbered_lines(items: list[str]) -> list[str]:
     return [f"{index}. {item}" for index, item in enumerate(items, start=1)]
 
 
-def merge_health_risks(selected_risks: list[str], custom_risks: str) -> list[str]:
-    custom_items = [
+def split_custom_health_risks(custom_risks: str) -> list[str]:
+    return [
         item.strip()
         for item in custom_risks.replace("，", ",").replace("、", ",").split(",")
         if item.strip()
     ]
+
+
+def merge_health_risks(selected_risks: list[str], custom_risks: str) -> list[str]:
+    custom_items = split_custom_health_risks(custom_risks)
     merged = dedupe(selected_risks + custom_items)
     if "無" in merged and len(merged) > 1:
         merged = [risk for risk in merged if risk != "無"]
     return merged or ["無"]
+
+
+def get_custom_health_risk_guidance(custom_risks: list[str], work_content: str, shift: str) -> dict[str, list[str]]:
+    if not custom_risks:
+        return {"risk": [], "education": [], "improvements": [], "follow_up": []}
+
+    risk_text = "、".join(custom_risks)
+    work_text = normalize_text(work_content) or "現行作業"
+    shift_text = normalize_text(shift)
+    management_items = [
+        f"針對其他健康風險註記（{risk_text}），建議主管與職護共同檢視{work_text}之工作負荷、作業頻率、休息安排及高風險作業分派",
+        f"若個案近期有{risk_text}相關病史或功能受限情形，建議於上工前確認精神狀態、疼痛或不適程度及作業安全適配性",
+    ]
+    if shift_text and shift_text not in ["日班", "未填"]:
+        management_items.append(f"針對{shift_text}作業，建議同步檢視工時安排、連續工作時間及疲勞累積情形")
+
+    return {
+        "risk": [
+            f"其他健康風險註記為{risk_text}，需結合實際作業姿勢、體力負荷、移動需求、暴露因子及班別安排，評估是否增加職場傷病、跌倒、疲勞或作業安全事件風險",
+        ],
+        "education": [
+            f"已指導個案於執行{work_text}時留意疼痛、發燒、頭暈、疲倦、步態不穩、傷口或感染相關警訊，若工作中出現明顯不適，應暫停高風險作業並通報主管或職護",
+            "提醒個案依作業內容採取適當休息、伸展、補水及防護具使用，避免因健康狀況未穩定而增加職業傷害風險",
+        ],
+        "improvements": management_items,
+        "follow_up": [
+            f"建議於下次臨場服務追蹤其他健康風險（{risk_text}）對{work_text}之作業負荷、工作適性及現場改善措施執行情形",
+        ],
+    }
 
 
 def join_as_record_sentence(items: list[str]) -> str:
@@ -378,6 +411,16 @@ def generate_recommendation(form_data: dict, rules_data: dict) -> tuple[str, lis
         improvement_items.extend(rule.get("improvements", []))
         follow_up_items.extend(rule.get("follow_up", []))
 
+    custom_guidance = get_custom_health_risk_guidance(
+        form_data.get("custom_health_risks", []),
+        form_data.get("work_content", ""),
+        form_data.get("shift", ""),
+    )
+    risk_items.extend(custom_guidance["risk"])
+    education_items.extend(custom_guidance["education"])
+    improvement_items.extend(custom_guidance["improvements"])
+    follow_up_items.extend(custom_guidance["follow_up"])
+
     if not risk_items:
         risk_items.append(rules_data["insufficient_data_message"])
     if not education_items:
@@ -415,8 +458,9 @@ def generate_recommendation(form_data: dict, rules_data: dict) -> tuple[str, lis
 def generate_appendix_record(form_data: dict, rules_data: dict) -> tuple[str, list[dict]]:
     matched_rules = get_matched_rules(form_data, rules_data)
     context_notes = get_context_notes(form_data, rules_data)
+    custom_health_risks = form_data.get("custom_health_risks", [])
 
-    if not matched_rules and not context_notes:
+    if not matched_rules and not context_notes and not custom_health_risks:
         message = rules_data["insufficient_data_message"]
         return "\n\n".join(
             part
@@ -440,6 +484,16 @@ def generate_appendix_record(form_data: dict, rules_data: dict) -> tuple[str, li
         education_items.extend(rule.get("education", []))
         improvement_items.extend(rule.get("improvements", []))
         follow_up_items.extend(rule.get("follow_up", []))
+
+    custom_guidance = get_custom_health_risk_guidance(
+        form_data.get("custom_health_risks", []),
+        form_data.get("work_content", ""),
+        form_data.get("shift", ""),
+    )
+    risk_items.extend(custom_guidance["risk"])
+    education_items.extend(custom_guidance["education"])
+    improvement_items.extend(custom_guidance["improvements"])
+    follow_up_items.extend(custom_guidance["follow_up"])
 
     risk_items = dedupe(risk_items)
     education_items = dedupe(education_items)
@@ -682,6 +736,7 @@ def main() -> None:
         submitted = st.form_submit_button("產生建議", type="primary")
 
     if submitted:
+        custom_health_risk_items = split_custom_health_risks(custom_health_risks)
         health_risks = merge_health_risks(health_risks, custom_health_risks)
 
         form_data = {
@@ -692,6 +747,7 @@ def main() -> None:
             "work_content": work_content,
             "shift": shift,
             "health_risks": health_risks,
+            "custom_health_risks": custom_health_risk_items,
             "health_management_year": health_management_year,
             "health_level": health_level,
             "health_case_id": health_case_id,
