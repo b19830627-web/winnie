@@ -738,13 +738,11 @@ def generate_appendix_record(form_data: dict, rules_data: dict) -> tuple[str, li
         fit_result = f"現階段評估為{selected_fitness}。"
         if work_fitness_detail:
             fit_result = f"{fit_result}{strip_record_punctuation(work_fitness_detail)}。"
-        elif "適任原單位工作" in selected_fitness:
-            fit_result = f"{fit_result}可勝任{department}{job_title}及原作業內容。"
-        else:
+        elif "適任原單位工作" not in selected_fitness:
             fit_result = f"{fit_result}建議依職護、醫師與事業單位評估結果，確認必要之工作調整、限制或後續追蹤事項。"
     if medical_follow_up:
         fit_result = f"{fit_result} 評估結果：{strip_record_punctuation(medical_follow_up)}。"
-    health_guidance_result = f"已向個案說明{all_risks}對健康與作業安全之影響，並給予與作業風險相關之健康指導及改善建議。"
+    health_guidance_result = "已向個案說明作業風險相關之健康指導及改善建議。"
     management_line = f"3-1 管理建議：\n{management_text}" if "\n" in management_text else f"3-1 管理建議：{management_text}"
     case_heading = f"{case_id}（{department}）" if department != "未填" else case_id
 
