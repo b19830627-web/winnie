@@ -57,6 +57,14 @@ WORK_FITNESS_OPTIONS = [
     "不適任",
 ]
 
+HEALTH_LEVEL_OPTIONS = ["", "第一級", "第二級", "第三級", "第四級"]
+
+SPECIAL_HAZARD_FIELDS = {
+    "noise_health_level": "噪音",
+    "dust_health_level": "粉塵",
+    "radiation_health_level": "游離輻射",
+}
+
 
 def get_access_password() -> str:
     try:
@@ -233,14 +241,29 @@ def strip_record_punctuation(text: str) -> str:
     return text.strip().rstrip("。；;")
 
 
-def build_data_basis(health_level: str, health_risks: str) -> str:
+def build_data_basis(health_level: str, form_data: dict) -> str:
     if health_level and health_level != "未分級":
         level_text = health_level if health_level.startswith("健康管理") else f"健康管理{health_level}"
     else:
         level_text = "未提供健康管理分級"
-    if health_risks and health_risks not in ["無", "無特殊健康風險註記"]:
-        return f"{level_text}；主要風險類別：{health_risks}。"
+
+    special_hazard_parts = []
+    for field, label in SPECIAL_HAZARD_FIELDS.items():
+        level = normalize_text(form_data.get(field))
+        if level:
+            special_hazard_parts.append(f"{label}作業健康管理{level}")
+
+    if special_hazard_parts:
+        return f"{level_text}；特別危害作業健康管理：{'、'.join(special_hazard_parts)}。"
     return f"{level_text}。"
+
+
+def build_risk_focus(risk_items: list[str], health_risks: str) -> str:
+    focus_items = []
+    if health_risks and health_risks not in ["無", "無特殊健康風險註記"]:
+        focus_items.append(f"主要風險類別：{health_risks}")
+    focus_items.extend(risk_items)
+    return join_as_record_sentence(focus_items)
 
 
 def keep_workplace_item(item: str) -> bool:
@@ -454,8 +477,8 @@ def generate_appendix_record(form_data: dict, rules_data: dict) -> tuple[str, li
     ]
     all_risks = "、".join(matched_labels) or "未明確辨識"
     work_risks = "、".join(exposure_labels) or (work_content if work_content != "未填" else "未明確辨識")
-    data_basis = build_data_basis(health_level, health_risks)
-    risk_focus = join_as_record_sentence(risk_items)
+    data_basis = build_data_basis(health_level, form_data)
+    risk_focus = build_risk_focus(risk_items, health_risks)
     if senior_text:
         risk_focus = f"{risk_focus}{senior_text}"
     management_text = build_workplace_management(management_items, work_risks, shift)
@@ -598,7 +621,7 @@ def main() -> None:
             shift = st.selectbox("班別", ["", "日班", "二班制", "三班制", "輪班", "夜間工作"])
             health_level = st.selectbox(
                 "健康管理分級",
-                ["", "第一級", "第二級", "第三級", "第四級"],
+                HEALTH_LEVEL_OPTIONS,
                 help="可依公司健檢管理或職護評估結果選擇健康管理分級。",
             )
             work_content = st.text_area(
@@ -613,6 +636,10 @@ def main() -> None:
             with col3:
                 health_case_id = st.text_input("健康編號", placeholder="例如：115-04-15-01")
                 health_basis = st.text_area("健康評估依據", placeholder="例如：113 年度健康檢查第三級管理、血壓第二級管理。", height=80)
+                st.markdown("特別危害作業健康管理")
+                noise_health_level = st.selectbox("噪音", HEALTH_LEVEL_OPTIONS)
+                dust_health_level = st.selectbox("粉塵", HEALTH_LEVEL_OPTIONS)
+                radiation_health_level = st.selectbox("游離輻射", HEALTH_LEVEL_OPTIONS)
                 work_ability_level = st.selectbox(
                     "中高齡工作適能等級",
                     ["", "弱", "普通", "良", "優"],
@@ -641,6 +668,9 @@ def main() -> None:
             "health_level": health_level,
             "health_case_id": health_case_id,
             "health_basis": health_basis,
+            "noise_health_level": noise_health_level,
+            "dust_health_level": dust_health_level,
+            "radiation_health_level": radiation_health_level,
             "senior_assessment": senior_assessment,
             "work_ability_level": work_ability_level,
             "medical_follow_up": medical_follow_up,
