@@ -240,8 +240,8 @@ def get_custom_health_risk_guidance(custom_risks: list[str], work_content: str, 
     work_text = normalize_text(work_content) or "現行作業"
     shift_text = normalize_text(shift)
     management_items = [
-        f"針對其他健康風險註記（{risk_text}），建議主管與職護共同檢視{work_text}之工作負荷、作業頻率、休息安排及高風險作業分派",
-        f"若個案近期有{risk_text}相關病史或功能受限情形，建議於上工前確認精神狀態、疼痛或不適程度及作業安全適配性",
+        f"針對其他健康風險註記（{risk_text}），建議檢視{work_text}之工作負荷、作業頻率、休息安排及高風險作業分派",
+        f"若個案近期有{risk_text}相關病史或功能受限情形，建議確認疼痛、不適或功能受限程度及作業安全適配性",
     ]
     if shift_text and shift_text not in ["日班", "未填"]:
         management_items.append(f"針對{shift_text}作業，建議同步檢視工時安排、連續工作時間及疲勞累積情形")
@@ -323,10 +323,14 @@ def keep_workplace_item(item: str) -> bool:
 
 def normalize_role_wording(item: str) -> str:
     replacements = {
-        "建議雇主與職護共同評估是否需調整工作負荷、班別、暴露時間或高風險作業安排": "建議事業單位依職護評估結果，檢視工作負荷、班別、暴露時間及高風險作業安排是否需調整",
-        "建議主管與職護共同評估工作負荷、休息安排與必要之工作調整": "建議主管依職護評估結果，檢視工作負荷、休息安排及必要之工作調整",
-        "建議雇主依醫師與職護建議": "建議事業單位依職護與醫師評估結果",
-        "建議雇主": "建議事業單位",
+        "建議雇主與職護共同評估是否需調整工作負荷、班別、暴露時間或高風險作業安排": "建議檢視工作負荷、班別、暴露時間及高風險作業安排是否需調整",
+        "建議主管與職護共同評估工作負荷、休息安排與必要之工作調整": "建議檢視工作負荷、休息安排及必要之工作調整",
+        "建議雇主依醫師與職護建議": "建議依評估結果",
+        "建議主管與職護共同": "建議",
+        "主管與職護共同": "",
+        "建議主管依": "建議依",
+        "建議主管": "建議",
+        "建議雇主": "建議",
     }
     normalized = item
     for old, new in replacements.items():
@@ -334,12 +338,42 @@ def normalize_role_wording(item: str) -> str:
     return normalized
 
 
-def build_workplace_management(items: list[str], work_risks: str, shift: str) -> str:
+def extract_recent_health_context(custom_risks: list[str]) -> str:
+    if not custom_risks:
+        return ""
+    risk_text = "、".join(custom_risks)
+    if "因" in risk_text:
+        before, after = risk_text.split("因", 1)
+        date_text = before.strip()
+        reason_text = after.strip()
+        if date_text and reason_text:
+            return f"個案近期（{date_text}）因{reason_text}"
+    return f"個案近期有{risk_text}相關健康風險"
+
+
+def build_workplace_management(items: list[str], work_risks: str, shift: str, custom_risks=None) -> str:
+    custom_risks = custom_risks or []
+    has_heat_risk = any(keyword in work_risks for keyword in ["高溫", "熱", "高氣溫"]) or any(
+        any(keyword in item for keyword in ["熱危害", "高溫", "高氣溫"]) for item in items
+    )
+    grouped_items = []
+    if has_heat_risk:
+        grouped_items.append(
+            "**熱危害與負荷管理**：建立熱危害通報與緊急處置流程；依現場熱暴露程度與高氣溫作業特性，適時檢視並調整作業分派、輪替制度及休息頻率。"
+        )
+    if custom_risks:
+        health_context = extract_recent_health_context(custom_risks)
+        grouped_items.append(
+            f"**近期傷病與適配性評估**：針對{health_context}，建議確認傷口是否仍有疼痛、功能受限情形，以評估作業安全適配性，必要時給予適當之工作調整。"
+        )
+    if grouped_items:
+        return "\n".join(grouped_items)
+
     cleaned_items = [
         normalize_role_wording(strip_record_punctuation(item)) for item in items if keep_workplace_item(item)
     ]
     if work_risks and work_risks != "未明確辨識":
-        cleaned_items.append(f"建議主管依{work_risks}檢視作業分派、休息頻率、輪替制度與工作負荷")
+        cleaned_items.append(f"建議依{work_risks}檢視作業分派、休息頻率、輪替制度與工作負荷")
     if shift and shift not in ["未填", "日班"]:
         cleaned_items.append(f"針對{shift}人員建立疲勞風險辨識、交接班確認與異常狀況通報機制")
     return join_as_record_sentence(dedupe(cleaned_items))
@@ -553,7 +587,12 @@ def generate_appendix_record(form_data: dict, rules_data: dict) -> tuple[str, li
     risk_focus = build_risk_focus(risk_items, health_risks)
     if senior_text:
         risk_focus = f"{risk_focus}{senior_text}"
-    management_text = build_workplace_management(management_items, work_risks, shift)
+    management_text = build_workplace_management(
+        management_items,
+        work_risks,
+        shift,
+        form_data.get("custom_health_risks", []),
+    )
     environment_text = join_as_record_sentence([normalize_role_wording(item) for item in environment_items])
     education_text = build_workplace_education(education_items, work_risks)
     follow_up_text = build_workplace_follow_up(follow_up_items, work_risks, work_content, shift)
@@ -570,6 +609,7 @@ def generate_appendix_record(form_data: dict, rules_data: dict) -> tuple[str, li
     if medical_follow_up:
         fit_result = f"{fit_result} 評估結果：{strip_record_punctuation(medical_follow_up)}。"
     health_guidance_result = f"已向個案說明{all_risks}對健康與作業安全之影響，並給予與作業風險相關之健康指導及改善建議。"
+    management_line = f"3-1 管理建議：\n{management_text}" if management_text.startswith("**") else f"3-1 管理建議：{management_text}"
 
     parts = [
         f"1.健康編號：{case_id}",
@@ -582,7 +622,7 @@ def generate_appendix_record(form_data: dict, rules_data: dict) -> tuple[str, li
         f"2-2 風險重點：{risk_focus}",
         "",
         "(3)改善及建議採行措施",
-        f"3-1 管理建議：{management_text}",
+        management_line,
         f"3-2 環境建議： {environment_text}",
         f"3-3 教育指導： {education_text}",
         "",
