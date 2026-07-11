@@ -457,8 +457,9 @@ def extract_recent_health_context(custom_risks: list[str]) -> str:
 
 def build_workplace_management(items: list[str], work_risks: str, shift: str, custom_risks=None) -> str:
     custom_risks = custom_risks or []
-    has_heat_risk = any(keyword in work_risks for keyword in ["高溫", "熱", "高氣溫"]) or any(
-        any(keyword in item for keyword in ["熱危害", "高溫", "高氣溫"]) for item in items
+    has_heat_risk = any(
+        keyword in work_risks
+        for keyword in ["高溫作業", "高氣溫作業", "熱暴露", "熱環境", "熱危害"]
     )
     grouped_items = []
     if has_heat_risk:
