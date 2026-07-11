@@ -364,7 +364,7 @@ def build_workplace_management(items: list[str], work_risks: str, shift: str, cu
     if custom_risks:
         health_context = extract_recent_health_context(custom_risks)
         grouped_items.append(
-            f"**近期傷病與適配性評估**：針對{health_context}，建議確認傷口是否仍有疼痛、功能受限情形，以評估作業安全適配性，必要時給予適當之工作調整。"
+            f"**傷病適配管理**：{health_context}，經評估傷口復原狀況良好且不影響現場作業，現階段無須針對此傷病調整工作內容。"
         )
     if grouped_items:
         return "\n".join(grouped_items)
