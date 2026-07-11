@@ -373,7 +373,12 @@ def build_data_basis(health_level: str, form_data: dict) -> str:
     return f"{level_text}。"
 
 
-def build_risk_focus(health_risks: str, work_risks: str, form_data: dict) -> str:
+def build_risk_focus(
+    health_risks: str,
+    work_risks: str,
+    form_data: dict,
+    risk_detail_items: list[str] | None = None,
+) -> str:
     health_categories = [
         item.strip()
         for item in health_risks.replace("，", "、").split("、")
@@ -434,6 +439,11 @@ def build_risk_focus(health_risks: str, work_risks: str, form_data: dict) -> str
         ])
         if outcomes:
             parts.append(f"持續暴露於{exposure_text}，可能增加{'、'.join(outcomes)}風險。")
+
+    for item in risk_detail_items or []:
+        clean_item = strip_record_punctuation(item)
+        if clean_item and clean_item not in parts:
+            parts.append(f"{clean_item}。")
 
     work_ability_level = normalize_text(form_data.get("work_ability_level"))
     if work_ability_level:
@@ -746,7 +756,7 @@ def generate_appendix_record(form_data: dict, rules_data: dict) -> tuple[str, li
     all_risks = "、".join(matched_labels) or "未明確辨識"
     work_risks = "、".join(exposure_labels) or (work_content if work_content != "未填" else "未明確辨識")
     data_basis = build_data_basis(health_level, form_data)
-    risk_focus = build_risk_focus(health_risks, work_risks, form_data)
+    risk_focus = build_risk_focus(health_risks, work_risks, form_data, risk_items)
     management_text = build_workplace_management(
         management_items,
         work_risks,
