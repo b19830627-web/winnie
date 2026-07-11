@@ -21,12 +21,14 @@ FIELD_LABELS = {
     "work_content": "主要作業內容",
     "shift": "班別",
     "health_risks": "特殊健康風險",
+    "health_management_year": "健康管理年度",
     "health_level": "健康管理分級",
     "health_case_id": "健康編號",
     "health_basis": "健康評估依據",
     "senior_assessment": "中高齡評估",
     "work_ability_level": "中高齡工作適能等級",
     "medical_follow_up": "評估結果",
+    "special_hazard_year": "特別危害作業年度",
     "work_fitness_options": "工作適性建議",
     "work_fitness_detail": "工作適性詳述",
     "notes": "補充說明",
@@ -241,9 +243,25 @@ def strip_record_punctuation(text: str) -> str:
     return text.strip().rstrip("。；;")
 
 
+def normalize_year(year: str) -> str:
+    clean_year = normalize_text(year)
+    return clean_year.rstrip("年度年") if clean_year else ""
+
+
+def with_year_prefix(text: str, year: str) -> str:
+    clean_year = normalize_year(year)
+    if clean_year:
+        return f"{clean_year}年度{text}"
+    return text
+
+
 def build_data_basis(health_level: str, form_data: dict) -> str:
+    health_year = normalize_year(form_data.get("health_management_year"))
+    special_hazard_year = normalize_year(form_data.get("special_hazard_year")) or health_year
+
     if health_level and health_level != "未分級":
-        level_text = health_level if health_level.startswith("健康管理") else f"健康管理{health_level}"
+        base_level_text = health_level if health_level.startswith("健康管理") else f"健康管理{health_level}"
+        level_text = with_year_prefix(base_level_text, health_year)
     else:
         level_text = "未提供健康管理分級"
 
@@ -251,7 +269,7 @@ def build_data_basis(health_level: str, form_data: dict) -> str:
     for field, label in SPECIAL_HAZARD_FIELDS.items():
         level = normalize_text(form_data.get(field))
         if level:
-            special_hazard_parts.append(f"{label}作業健康管理{level}")
+            special_hazard_parts.append(with_year_prefix(f"{label}作業健康管理{level}", special_hazard_year))
 
     if special_hazard_parts:
         return f"{level_text}；特別危害作業健康管理：{'、'.join(special_hazard_parts)}。"
@@ -619,6 +637,11 @@ def main() -> None:
             )
         with col2:
             shift = st.selectbox("班別", ["", "日班", "二班制", "三班制", "輪班", "夜間工作"])
+            health_management_year = st.text_input(
+                "健康管理年度",
+                placeholder="例如：114、115",
+                help="填入民國年度數字，輸出會顯示為「115年度健康管理第二級」。",
+            )
             health_level = st.selectbox(
                 "健康管理分級",
                 HEALTH_LEVEL_OPTIONS,
@@ -637,6 +660,10 @@ def main() -> None:
                 health_case_id = st.text_input("健康編號", placeholder="例如：115-04-15-01")
                 health_basis = st.text_area("健康評估依據", placeholder="例如：113 年度健康檢查第三級管理、血壓第二級管理。", height=80)
                 st.markdown("特別危害作業健康管理")
+                special_hazard_year = st.text_input(
+                    "特別危害作業年度",
+                    placeholder="例如：114、115；未填則沿用健康管理年度",
+                )
                 noise_health_level = st.selectbox("噪音", HEALTH_LEVEL_OPTIONS)
                 dust_health_level = st.selectbox("粉塵", HEALTH_LEVEL_OPTIONS)
                 radiation_health_level = st.selectbox("游離輻射", HEALTH_LEVEL_OPTIONS)
@@ -665,9 +692,11 @@ def main() -> None:
             "work_content": work_content,
             "shift": shift,
             "health_risks": health_risks,
+            "health_management_year": health_management_year,
             "health_level": health_level,
             "health_case_id": health_case_id,
             "health_basis": health_basis,
+            "special_hazard_year": special_hazard_year,
             "noise_health_level": noise_health_level,
             "dust_health_level": dust_health_level,
             "radiation_health_level": radiation_health_level,
