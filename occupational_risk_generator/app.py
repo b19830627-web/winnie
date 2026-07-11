@@ -67,6 +67,8 @@ SPECIAL_HAZARD_FIELDS = {
     "radiation_health_level": "游離輻射",
 }
 
+HEALTH_STATUS_KEYWORDS = ["不影響工作", "已不影響", "無功能受限", "已恢復", "已復原"]
+
 
 def get_access_password() -> str:
     try:
@@ -225,7 +227,10 @@ def split_custom_health_risks(custom_risks: str) -> list[str]:
 
 
 def merge_health_risks(selected_risks: list[str], custom_risks: str) -> list[str]:
-    custom_items = split_custom_health_risks(custom_risks)
+    custom_items = [
+        item for item in split_custom_health_risks(custom_risks)
+        if not any(keyword in item for keyword in HEALTH_STATUS_KEYWORDS)
+    ]
     merged = dedupe(selected_risks + custom_items)
     if "無" in merged and len(merged) > 1:
         merged = [risk for risk in merged if risk != "無"]
@@ -233,10 +238,14 @@ def merge_health_risks(selected_risks: list[str], custom_risks: str) -> list[str
 
 
 def get_custom_health_risk_guidance(custom_risks: list[str], work_content: str, shift: str) -> dict[str, list[str]]:
-    if not custom_risks:
+    event_risks = [
+        item for item in custom_risks
+        if not any(keyword in item for keyword in HEALTH_STATUS_KEYWORDS)
+    ]
+    if not event_risks:
         return {"risk": [], "education": [], "improvements": [], "follow_up": []}
 
-    risk_text = "、".join(custom_risks)
+    risk_text = "、".join(event_risks)
     work_text = normalize_text(work_content) or "現行作業"
     shift_text = normalize_text(shift)
     management_items = [
@@ -443,9 +452,13 @@ def normalize_role_wording(item: str) -> str:
 
 
 def extract_recent_health_context(custom_risks: list[str]) -> str:
-    if not custom_risks:
+    event_risks = [
+        item for item in custom_risks
+        if not any(keyword in item for keyword in HEALTH_STATUS_KEYWORDS)
+    ]
+    if not event_risks:
         return ""
-    risk_text = "、".join(custom_risks)
+    risk_text = "、".join(event_risks)
     if "因" in risk_text:
         before, after = risk_text.split("因", 1)
         date_text = before.strip()
@@ -468,9 +481,17 @@ def build_workplace_management(items: list[str], work_risks: str, shift: str, cu
         )
     if custom_risks:
         health_context = extract_recent_health_context(custom_risks)
-        grouped_items.append(
-            f"傷病適配管理：{health_context}，經評估傷口復原狀況良好且不影響現場作業，現階段無須針對此傷病調整工作內容。"
+        has_resolved_status = any(
+            any(keyword in item for keyword in HEALTH_STATUS_KEYWORDS) for item in custom_risks
         )
+        if health_context and has_resolved_status:
+            grouped_items.append(
+                f"傷病適配管理：{health_context}，經評估已不影響工作，現階段無須針對此傷病調整工作內容。"
+            )
+        elif health_context:
+            grouped_items.append(
+                f"傷病適配管理：{health_context}，建議確認目前症狀、功能受限程度及作業安全適配性，必要時調整工作內容。"
+            )
     if grouped_items:
         for item in items:
             clean_item = normalize_role_wording(strip_record_punctuation(item))
