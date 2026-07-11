@@ -364,12 +364,61 @@ def build_data_basis(health_level: str, form_data: dict) -> str:
     return f"{level_text}。"
 
 
-def build_risk_focus(risk_items: list[str], health_risks: str) -> str:
-    focus_items = []
-    if health_risks and health_risks not in ["無", "無特殊健康風險註記"]:
-        focus_items.append(f"主要風險類別：{health_risks}")
-    focus_items.extend(risk_items)
-    return join_as_record_sentence(focus_items)
+def build_risk_focus(health_risks: str, work_risks: str, form_data: dict) -> str:
+    health_categories = [
+        item.strip()
+        for item in health_risks.replace("，", "、").split("、")
+        if item.strip() and item.strip() not in ["無", "無特殊健康風險註記"]
+    ]
+    hazard_categories = [
+        f"{label}作業暴露"
+        for field, label in SPECIAL_HAZARD_FIELDS.items()
+        if normalize_text(form_data.get(field))
+    ]
+    main_categories = dedupe(health_categories + hazard_categories)
+
+    parts = []
+    if main_categories:
+        parts.append(f"主要風險包括{'、'.join(main_categories)}。")
+
+    exposure_text = normalize_text(work_risks)
+    if exposure_text and exposure_text != "未明確辨識":
+        source_text = f"{exposure_text} {normalize_text(form_data.get('work_content'))}"
+        outcome_map = [
+            (["久站", "久坐", "搬運", "重複", "人因", "姿勢", "手部", "電腦"], "肌肉骨骼傷害"),
+            (["噪音"], "聽力損失"),
+            (["粉塵", "化學品", "呼吸"], "呼吸系統不適"),
+            (["輪班", "夜間", "長工時", "疲勞", "高溫", "熱"], "心血管與疲勞負荷"),
+            (["高溫", "熱"], "熱危害"),
+            (["游離輻射", "輻射"], "游離輻射暴露危害"),
+            (["外勤", "交通", "駕駛", "重機具"], "作業事故"),
+        ]
+        outcomes = dedupe([
+            outcome
+            for keywords, outcome in outcome_map
+            if any(keyword in source_text for keyword in keywords)
+        ])
+        if outcomes:
+            parts.append(f"持續暴露於{exposure_text}，可能增加{'、'.join(outcomes)}風險。")
+
+    work_ability_level = normalize_text(form_data.get("work_ability_level"))
+    if work_ability_level:
+        ability_summaries = {
+            "弱": "目前尚無法勝任現行工作要求，應進一步評估工作調整需求",
+            "普通": "目前工作適能仍有待提高，應持續評估作業負荷與適配情形",
+            "良": "目前具備勝任現行工作的能力",
+            "優": "目前具備良好勝任現行工作的能力",
+        }
+        parts.append(
+            f"中高齡工作適能指數為「{work_ability_level}」，"
+            f"{ability_summaries.get(work_ability_level, WORK_ABILITY_MEANINGS.get(work_ability_level, ''))}。"
+        )
+
+    senior_assessment = normalize_text(form_data.get("senior_assessment"))
+    if senior_assessment:
+        parts.append(f"{strip_record_punctuation(senior_assessment)}。")
+
+    return "".join(parts) or "目前未辨識出明確風險，建議補充作業內容、班別或暴露因子，以利完整評估。"
 
 
 def keep_workplace_item(item: str) -> bool:
@@ -618,14 +667,6 @@ def generate_appendix_record(form_data: dict, rules_data: dict) -> tuple[str, li
     work_fitness_detail = normalize_text(form_data.get("work_fitness_detail"))
     notes = normalize_text(form_data.get("notes"))
 
-    senior_parts = []
-    if work_ability_level:
-        meaning = WORK_ABILITY_MEANINGS.get(work_ability_level, "")
-        senior_parts.append(f"中高齡工作適能指數為{work_ability_level}，{meaning}。")
-    if senior_assessment:
-        senior_parts.append(senior_assessment)
-    senior_text = " ".join(senior_parts)
-
     management_items = []
     environment_items = []
     for item in improvement_items:
@@ -658,9 +699,7 @@ def generate_appendix_record(form_data: dict, rules_data: dict) -> tuple[str, li
     all_risks = "、".join(matched_labels) or "未明確辨識"
     work_risks = "、".join(exposure_labels) or (work_content if work_content != "未填" else "未明確辨識")
     data_basis = build_data_basis(health_level, form_data)
-    risk_focus = build_risk_focus(risk_items, health_risks)
-    if senior_text:
-        risk_focus = f"{risk_focus}{senior_text}"
+    risk_focus = build_risk_focus(health_risks, work_risks, form_data)
     management_text = build_workplace_management(
         management_items,
         work_risks,
