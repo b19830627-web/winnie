@@ -16,8 +16,6 @@ DEFAULT_ACCESS_PASSWORD = "666"
 
 
 FIELD_LABELS = {
-    "company": "公司名稱",
-    "industry": "產業別",
     "department": "部門",
     "job_title": "職務名稱",
     "work_content": "主要作業內容",
@@ -180,7 +178,7 @@ def get_matched_rules(form_data: dict, rules_data: dict) -> list[dict]:
 def get_context_notes(form_data: dict, rules_data: dict) -> list[str]:
     notes = []
     note_map = rules_data.get("industry_department_notes", {})
-    for key in [form_data.get("industry"), form_data.get("department")]:
+    for key in [form_data.get("department")]:
         clean_key = normalize_text(key)
         if clean_key in note_map:
             notes.extend(note_map[clean_key])
@@ -189,7 +187,7 @@ def get_context_notes(form_data: dict, rules_data: dict) -> list[str]:
 
 def build_intro(form_data: dict) -> str:
     parts = []
-    for key in ["company", "industry", "department", "job_title"]:
+    for key in ["department", "job_title"]:
         value = normalize_text(form_data.get(key))
         if value:
             parts.append(f"{FIELD_LABELS[key]}：{value}")
@@ -206,6 +204,18 @@ def build_section(title: str, items: list[str]) -> str:
 
 def build_numbered_lines(items: list[str]) -> list[str]:
     return [f"{index}. {item}" for index, item in enumerate(items, start=1)]
+
+
+def merge_health_risks(selected_risks: list[str], custom_risks: str) -> list[str]:
+    custom_items = [
+        item.strip()
+        for item in custom_risks.replace("，", ",").replace("、", ",").split(",")
+        if item.strip()
+    ]
+    merged = dedupe(selected_risks + custom_items)
+    if "無" in merged and len(merged) > 1:
+        merged = [risk for risk in merged if risk != "無"]
+    return merged or ["無"]
 
 
 def join_as_record_sentence(items: list[str]) -> str:
@@ -562,7 +572,7 @@ def main() -> None:
     rules_data = load_rules()
 
     st.title(APP_TITLE)
-    st.caption("依據公司、部門、作業內容、班別與健康風險，自動產生可用於臨場服務紀錄、年度報告或健康風險評估表之文字建議。")
+    st.caption("依據部門、職務、作業內容、班別與健康風險，自動產生可用於臨場服務紀錄、年度報告或健康風險評估表之文字建議。")
 
     with st.form("risk_form"):
         output_format = st.radio(
@@ -573,20 +583,19 @@ def main() -> None:
         )
         col1, col2 = st.columns(2)
         with col1:
-            company = st.text_input("公司名稱")
-            industry = st.selectbox(
-                "產業別",
-                ["", "營造業", "製造業", "飯店業", "日照中心", "辦公室作業", "其他"],
-            )
             department = st.text_input("部門", placeholder="例如：行政部、倉庫、製造部、品保、工程部、房務、櫃檯、廚房、照服員")
             job_title = st.text_input("職務名稱")
-        with col2:
-            shift = st.selectbox("班別", ["", "日班", "二班制", "三班制", "輪班", "夜間工作"])
             health_risks = st.multiselect(
-                "是否有特殊健康風險",
+                "特殊健康風險",
                 ["高血壓", "血糖異常", "血脂異常", "肝功能異常", "貧血", "肌肉骨骼不適", "疲勞高負荷", "中高齡", "孕產婦", "慢性病", "無"],
                 default=["無"],
             )
+            custom_health_risks = st.text_input(
+                "其他健康風險",
+                placeholder="可自行輸入，例如：住院、手術後、睡眠障礙；多個項目可用頓號或逗號分隔",
+            )
+        with col2:
+            shift = st.selectbox("班別", ["", "日班", "二班制", "三班制", "輪班", "夜間工作"])
             health_level = st.selectbox(
                 "健康管理分級",
                 ["", "第一級", "第二級", "第三級", "第四級"],
@@ -619,12 +628,11 @@ def main() -> None:
         submitted = st.form_submit_button("產生建議", type="primary")
 
     if submitted:
-        if "無" in health_risks and len(health_risks) > 1:
-            health_risks = [risk for risk in health_risks if risk != "無"]
+        health_risks = merge_health_risks(health_risks, custom_health_risks)
 
         form_data = {
-            "company": company,
-            "industry": industry,
+            "company": "",
+            "industry": "",
             "department": department,
             "job_title": job_title,
             "work_content": work_content,
@@ -663,12 +671,12 @@ def main() -> None:
             copy_button(st.session_state["result_text"])
         with button_col2:
             docx_bytes = create_word_file(st.session_state["result_text"], st.session_state["form_data"])
-            safe_company = normalize_text(st.session_state["form_data"].get("company")) or "職業安全風險評估"
+            safe_department = normalize_text(st.session_state["form_data"].get("department")) or "職業安全風險評估"
             suffix = "附表八紀錄" if st.session_state.get("output_format") == "附表八紀錄式" else "職業安全風險評估建議"
             st.download_button(
                 "下載 Word 檔",
                 data=docx_bytes,
-                file_name=f"{safe_company}_{suffix}.docx",
+                file_name=f"{safe_department}_{suffix}.docx",
                 mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             )
 
