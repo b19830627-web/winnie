@@ -261,6 +261,61 @@ def get_custom_health_risk_guidance(custom_risks: list[str], work_content: str, 
     }
 
 
+def get_special_hazard_guidance(form_data: dict) -> dict[str, list[str]]:
+    guidance = {"management": [], "environment": [], "education": [], "follow_up": []}
+    noise_level = normalize_text(form_data.get("noise_health_level"))
+    dust_level = normalize_text(form_data.get("dust_health_level"))
+    radiation_level = normalize_text(form_data.get("radiation_health_level"))
+
+    if noise_level:
+        guidance["management"].append(
+            f"噪音作業管理：目前噪音作業健康管理為{noise_level}，建議檢視噪音暴露時間、作業輪替、聽力防護具配戴及保存管理情形。"
+        )
+        guidance["environment"].append(
+            "噪音作業環境建議：確認噪音源隔離、設備維護、警示標示及耳塞或耳罩配置是否符合現場作業需求。"
+        )
+        guidance["education"].append(
+            "噪音作業教育指導：提醒正確配戴耳塞或耳罩，避免自行縮短配戴時間，並留意耳鳴、聽力下降或溝通困難等警訊。"
+        )
+        guidance["follow_up"].append(
+            "後續追蹤噪音暴露控制、聽力防護具使用情形及噪音作業健康管理分級變化。"
+        )
+
+    if dust_level:
+        guidance["management"].append(
+            f"粉塵作業管理：目前粉塵作業健康管理為{dust_level}，建議檢視粉塵暴露時間、作業方式、局部排氣及呼吸防護具使用管理。"
+        )
+        guidance["environment"].append(
+            "粉塵作業環境建議：確認濕式作業、局部排氣、清掃方式、粉塵逸散控制及呼吸防護具配置是否足夠。"
+        )
+        guidance["education"].append(
+            "粉塵作業教育指導：提醒正確配戴合適呼吸防護具，避免乾掃或造成二次揚塵，並留意咳嗽、胸悶、呼吸道刺激等症狀。"
+        )
+        guidance["follow_up"].append(
+            "後續追蹤粉塵暴露控制、呼吸防護具使用情形及粉塵作業健康管理分級變化。"
+        )
+
+    if radiation_level:
+        guidance["management"].append(
+            f"游離輻射作業管理：目前游離輻射作業健康管理為{radiation_level}，建議檢視作業許可、暴露時間、劑量佩章配戴、屏蔽措施及作業紀錄管理。"
+        )
+        guidance["environment"].append(
+            "游離輻射作業環境建議：確認管制區標示、屏蔽設備、警示裝置、劑量監測與人員進出管理是否落實。"
+        )
+        guidance["education"].append(
+            "游離輻射作業教育指導：提醒遵守時間、距離、屏蔽原則，正確配戴劑量佩章，並依規定完成作業紀錄與異常通報。"
+        )
+        guidance["follow_up"].append(
+            "後續追蹤游離輻射暴露紀錄、劑量佩章配戴情形及游離輻射作業健康管理分級變化。"
+        )
+
+    return guidance
+
+
+def has_special_hazard_level(form_data: dict) -> bool:
+    return any(normalize_text(form_data.get(field)) for field in SPECIAL_HAZARD_FIELDS)
+
+
 def join_as_record_sentence(items: list[str]) -> str:
     cleaned = []
     for item in items:
@@ -359,15 +414,19 @@ def build_workplace_management(items: list[str], work_risks: str, shift: str, cu
     grouped_items = []
     if has_heat_risk:
         grouped_items.append(
-            "**熱危害與負荷管理**：建立熱危害通報與緊急處置流程；依現場熱暴露程度與高氣溫作業特性，適時檢視並調整作業分派、輪替制度及休息頻率。"
+            "熱危害與負荷管理：建立熱危害通報與緊急處置流程；依現場熱暴露程度與高氣溫作業特性，適時檢視並調整作業分派、輪替制度及休息頻率。"
         )
     if custom_risks:
         health_context = extract_recent_health_context(custom_risks)
         grouped_items.append(
-            f"**傷病適配管理**：{health_context}，經評估傷口復原狀況良好且不影響現場作業，現階段無須針對此傷病調整工作內容。"
+            f"傷病適配管理：{health_context}，經評估傷口復原狀況良好且不影響現場作業，現階段無須針對此傷病調整工作內容。"
         )
     if grouped_items:
-        return "\n".join(grouped_items)
+        for item in items:
+            clean_item = normalize_role_wording(strip_record_punctuation(item))
+            if clean_item.startswith(("噪音作業管理", "粉塵作業管理", "游離輻射作業管理")):
+                grouped_items.append(f"{clean_item}。")
+        return "\n".join(dedupe(grouped_items))
 
     cleaned_items = [
         normalize_role_wording(strip_record_punctuation(item)) for item in items if keep_workplace_item(item)
@@ -413,6 +472,7 @@ def generate_recommendation(form_data: dict, rules_data: dict) -> tuple[str, lis
         normalize_text(form_data.get("work_content"))
         or normalize_text(form_data.get("shift"))
         or normalize_text(form_data.get("health_level"))
+        or has_special_hazard_level(form_data)
     )
     has_only_none_health = form_data.get("health_risks") == ["無"]
 
@@ -450,10 +510,15 @@ def generate_recommendation(form_data: dict, rules_data: dict) -> tuple[str, lis
         form_data.get("work_content", ""),
         form_data.get("shift", ""),
     )
+    special_hazard_guidance = get_special_hazard_guidance(form_data)
     risk_items.extend(custom_guidance["risk"])
     education_items.extend(custom_guidance["education"])
     improvement_items.extend(custom_guidance["improvements"])
     follow_up_items.extend(custom_guidance["follow_up"])
+    education_items.extend(special_hazard_guidance["education"])
+    improvement_items.extend(special_hazard_guidance["management"])
+    improvement_items.extend(special_hazard_guidance["environment"])
+    follow_up_items.extend(special_hazard_guidance["follow_up"])
 
     if not risk_items:
         risk_items.append(rules_data["insufficient_data_message"])
@@ -494,7 +559,7 @@ def generate_appendix_record(form_data: dict, rules_data: dict) -> tuple[str, li
     context_notes = get_context_notes(form_data, rules_data)
     custom_health_risks = form_data.get("custom_health_risks", [])
 
-    if not matched_rules and not context_notes and not custom_health_risks:
+    if not matched_rules and not context_notes and not custom_health_risks and not has_special_hazard_level(form_data):
         message = rules_data["insufficient_data_message"]
         return "\n\n".join(
             part
@@ -524,10 +589,15 @@ def generate_appendix_record(form_data: dict, rules_data: dict) -> tuple[str, li
         form_data.get("work_content", ""),
         form_data.get("shift", ""),
     )
+    special_hazard_guidance = get_special_hazard_guidance(form_data)
     risk_items.extend(custom_guidance["risk"])
     education_items.extend(custom_guidance["education"])
     improvement_items.extend(custom_guidance["improvements"])
     follow_up_items.extend(custom_guidance["follow_up"])
+    education_items.extend(special_hazard_guidance["education"])
+    improvement_items.extend(special_hazard_guidance["management"])
+    improvement_items.extend(special_hazard_guidance["environment"])
+    follow_up_items.extend(special_hazard_guidance["follow_up"])
 
     risk_items = dedupe(risk_items)
     education_items = dedupe(education_items)
@@ -559,7 +629,11 @@ def generate_appendix_record(form_data: dict, rules_data: dict) -> tuple[str, li
     management_items = []
     environment_items = []
     for item in improvement_items:
-        if any(keyword in item for keyword in ["耳塞", "耳罩", "配戴方式", "保存狀況", "防護具尺寸"]):
+        if item.startswith(("噪音作業管理", "粉塵作業管理", "游離輻射作業管理")):
+            management_items.append(item)
+        elif item.startswith(("噪音作業環境建議", "粉塵作業環境建議", "游離輻射作業環境建議")):
+            environment_items.append(item)
+        elif any(keyword in item for keyword in ["耳塞", "耳罩", "配戴方式", "保存狀況", "防護具尺寸"]):
             management_items.append(item)
         elif any(keyword in item for keyword in ["工作檯", "物品", "設備", "通風", "遮陽", "補水點", "防護具", "推車", "升降台", "動線", "座椅", "螢幕", "鍵盤", "滑鼠", "環境", "配置"]):
             environment_items.append(item)
@@ -609,7 +683,7 @@ def generate_appendix_record(form_data: dict, rules_data: dict) -> tuple[str, li
     if medical_follow_up:
         fit_result = f"{fit_result} 評估結果：{strip_record_punctuation(medical_follow_up)}。"
     health_guidance_result = f"已向個案說明{all_risks}對健康與作業安全之影響，並給予與作業風險相關之健康指導及改善建議。"
-    management_line = f"3-1 管理建議：\n{management_text}" if management_text.startswith("**") else f"3-1 管理建議：{management_text}"
+    management_line = f"3-1 管理建議：\n{management_text}" if "\n" in management_text else f"3-1 管理建議：{management_text}"
 
     parts = [
         f"1.健康編號：{case_id}",
