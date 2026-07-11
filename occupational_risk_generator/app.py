@@ -496,7 +496,7 @@ def build_workplace_management(items: list[str], work_risks: str, shift: str, cu
     if grouped_items:
         for item in items:
             clean_item = normalize_role_wording(strip_record_punctuation(item))
-            if clean_item.startswith(("噪音作業管理", "粉塵作業管理", "游離輻射作業管理", "監督管理")):
+            if clean_item.startswith(("噪音作業管理", "粉塵作業管理", "游離輻射作業管理", "工作負荷與壓力管理")):
                 grouped_items.append(f"{clean_item}。")
         return "\n".join(dedupe(grouped_items))
 
