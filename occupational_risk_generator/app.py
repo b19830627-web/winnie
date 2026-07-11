@@ -393,8 +393,30 @@ def build_risk_focus(health_risks: str, work_risks: str, form_data: dict) -> str
     exposure_text = normalize_text(work_risks)
     if exposure_text and exposure_text != "未明確辨識":
         source_text = f"{exposure_text} {normalize_text(form_data.get('work_content'))}"
+        has_standing = "久站" in source_text or "長時間站立" in source_text
+        has_handling = any(keyword in source_text for keyword in ["搬運", "抬舉", "上下貨"])
+        has_shift_work = any(keyword in source_text for keyword in ["輪班", "夜間", "夜班", "二班制", "三班制"])
+
+        if has_standing and has_handling:
+            parts.append(
+                "人因性危害（肌肉骨骼傷害）：頻繁的搬運作業與長時間久站，容易造成下背痛、肩頸不適或下肢靜脈曲張等累積性肌肉骨骼傷害。"
+            )
+        elif has_standing:
+            parts.append(
+                "人因性危害（肌肉骨骼傷害）：長時間久站容易造成下肢痠痛、足底筋膜炎、膝踝關節不適及靜脈曲張等累積性肌肉骨骼傷害。"
+            )
+        elif has_handling:
+            parts.append(
+                "人因性危害（肌肉骨骼傷害）：頻繁搬運、抬舉或堆疊作業容易造成下背痛、肌肉拉傷、扭傷及肩頸負荷等累積性肌肉骨骼傷害。"
+            )
+
+        if has_shift_work:
+            parts.append(
+                "異常工作負荷（心血管與疲勞）：長期輪班與夜間工作會干擾生理時鐘，除造成慢性疲勞外，也可能增加腦心血管疾病及過勞相關風險。"
+            )
+
         outcome_map = [
-            (["久站", "久坐", "搬運", "重複", "人因", "姿勢", "手部", "電腦"], "肌肉骨骼傷害"),
+            (["久坐", "重複", "人因", "姿勢", "手部", "電腦"], "肌肉骨骼傷害"),
             (["噪音"], "聽力損失"),
             (["粉塵", "化學品", "呼吸"], "呼吸系統不適"),
             (["輪班", "夜間", "長工時", "疲勞", "高溫", "熱"], "心血管與疲勞負荷"),
@@ -407,6 +429,8 @@ def build_risk_focus(health_risks: str, work_risks: str, form_data: dict) -> str
             outcome
             for keywords, outcome in outcome_map
             if any(keyword in source_text for keyword in keywords)
+            and not (outcome == "肌肉骨骼傷害" and (has_standing or has_handling))
+            and not (outcome == "心血管與疲勞負荷" and has_shift_work)
         ])
         if outcomes:
             parts.append(f"持續暴露於{exposure_text}，可能增加{'、'.join(outcomes)}風險。")
@@ -428,7 +452,7 @@ def build_risk_focus(health_risks: str, work_risks: str, form_data: dict) -> str
     if senior_assessment:
         parts.append(f"{strip_record_punctuation(senior_assessment)}。")
 
-    return "".join(parts) or "目前未辨識出明確風險，建議補充作業內容、班別或暴露因子，以利完整評估。"
+    return "\n".join(parts) or "目前未辨識出明確風險，建議補充作業內容、班別或暴露因子，以利完整評估。"
 
 
 def keep_workplace_item(item: str) -> bool:
