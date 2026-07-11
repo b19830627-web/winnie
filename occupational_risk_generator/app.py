@@ -401,6 +401,7 @@ def build_risk_focus(health_risks: str, work_risks: str, form_data: dict) -> str
             (["高溫", "熱"], "熱危害"),
             (["游離輻射", "輻射"], "游離輻射暴露危害"),
             (["外勤", "交通", "駕駛", "重機具"], "作業事故"),
+            (["監督", "工程進度", "品質管理", "安全管理", "人員協調"], "工作壓力、疲勞及判斷失誤"),
         ]
         outcomes = dedupe([
             outcome
@@ -495,7 +496,7 @@ def build_workplace_management(items: list[str], work_risks: str, shift: str, cu
     if grouped_items:
         for item in items:
             clean_item = normalize_role_wording(strip_record_punctuation(item))
-            if clean_item.startswith(("噪音作業管理", "粉塵作業管理", "游離輻射作業管理")):
+            if clean_item.startswith(("噪音作業管理", "粉塵作業管理", "游離輻射作業管理", "監督管理")):
                 grouped_items.append(f"{clean_item}。")
         return "\n".join(dedupe(grouped_items))
 
