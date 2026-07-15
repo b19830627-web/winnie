@@ -23,7 +23,8 @@ FIELD_LABELS = {
     "health_risks": "特殊健康風險",
     "health_management_year": "健康管理年度",
     "health_level": "健康管理分級",
-    "health_case_id": "健康編號",
+    "employee_label": "X員",
+    "employee_id": "員編",
     "health_basis": "健康評估依據",
     "senior_assessment": "中高齡評估",
     "work_ability_level": "中高齡工作適能等級",
@@ -670,7 +671,7 @@ def generate_appendix_record(form_data: dict, rules_data: dict) -> tuple[str, li
         return "\n\n".join(
             part
             for part in [
-                "1.健康編號：未填",
+                "1.X員：未填，員編：未填",
                 f"(1)基本資料與作業特性\n1-1 工作型態：{message}\n1-2 作業特性：{message}",
                 f"(2)健康評估與風險分析\n2-1 數據依據：{message}\n2-2 風險重點：{message}",
                 f"(3)改善及建議採行措施\n3-1 管理建議：{message}\n3-2 環境建議：{message}\n3-3 教育指導：{message}",
@@ -710,7 +711,8 @@ def generate_appendix_record(form_data: dict, rules_data: dict) -> tuple[str, li
     improvement_items = dedupe(improvement_items)
     follow_up_items = dedupe(follow_up_items)
 
-    case_id = normalize_text(form_data.get("health_case_id")) or "未填"
+    employee_label = normalize_text(form_data.get("employee_label")) or "未填"
+    employee_id = normalize_text(form_data.get("employee_id")) or "未填"
     department = normalize_text(form_data.get("department")) or "未填"
     job_title = normalize_text(form_data.get("job_title")) or "未填"
     shift = normalize_text(form_data.get("shift")) or "未填"
@@ -778,10 +780,12 @@ def generate_appendix_record(form_data: dict, rules_data: dict) -> tuple[str, li
         fit_result = f"{fit_result} 評估結果：{strip_record_punctuation(medical_follow_up)}。"
     health_guidance_result = "已向個案說明作業風險相關之健康指導及改善建議。"
     management_line = f"3-1 管理建議：\n{management_text}" if "\n" in management_text else f"3-1 管理建議：{management_text}"
-    case_heading = f"{case_id}（{department}）" if department != "未填" else case_id
+    employee_heading = f"X員：{employee_label}，員編：{employee_id}"
+    if department != "未填":
+        employee_heading = f"{employee_heading}（{department}）"
 
     parts = [
-        f"1.健康編號：{case_heading}",
+        f"1.{employee_heading}",
         "(1)基本資料與作業特性",
         f"1-1 工作型態：工作班別為{shift}。",
         f"1-2 作業特性：擔任{job_title}，主要作業內容為{strip_record_punctuation(work_content)}。",
@@ -920,7 +924,8 @@ def main() -> None:
         with st.expander("附表八紀錄欄位（選填）"):
             col3, col4 = st.columns(2)
             with col3:
-                health_case_id = st.text_input("健康編號", placeholder="例如：115-04-15-01")
+                employee_label = st.text_input("X員", placeholder="例如：王員")
+                employee_id = st.text_input("員編", placeholder="例如：A00123")
                 health_basis = st.text_area("健康評估依據", placeholder="例如：113 年度健康檢查第三級管理、血壓第二級管理。", height=80)
                 st.markdown("特別危害作業健康管理")
                 special_hazard_year = st.text_input(
@@ -959,7 +964,8 @@ def main() -> None:
             "custom_health_risks": custom_health_risk_items,
             "health_management_year": health_management_year,
             "health_level": health_level,
-            "health_case_id": health_case_id,
+            "employee_label": employee_label,
+            "employee_id": employee_id,
             "health_basis": health_basis,
             "special_hazard_year": special_hazard_year,
             "noise_health_level": noise_health_level,
