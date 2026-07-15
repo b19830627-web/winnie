@@ -671,7 +671,7 @@ def generate_appendix_record(form_data: dict, rules_data: dict) -> tuple[str, li
         return "\n\n".join(
             part
             for part in [
-                "1.X員：未填，員編：未填",
+                "1.未填，員編：未填",
                 f"(1)基本資料與作業特性\n1-1 工作型態：{message}\n1-2 作業特性：{message}",
                 f"(2)健康評估與風險分析\n2-1 數據依據：{message}\n2-2 風險重點：{message}",
                 f"(3)改善及建議採行措施\n3-1 管理建議：{message}\n3-2 環境建議：{message}\n3-3 教育指導：{message}",
@@ -780,7 +780,7 @@ def generate_appendix_record(form_data: dict, rules_data: dict) -> tuple[str, li
         fit_result = f"{fit_result} 評估結果：{strip_record_punctuation(medical_follow_up)}。"
     health_guidance_result = "已向個案說明作業風險相關之健康指導及改善建議。"
     management_line = f"3-1 管理建議：\n{management_text}" if "\n" in management_text else f"3-1 管理建議：{management_text}"
-    employee_heading = f"X員：{employee_label}，員編：{employee_id}"
+    employee_heading = f"{employee_label}，員編：{employee_id}"
     if department != "未填":
         employee_heading = f"{employee_heading}（{department}）"
 
