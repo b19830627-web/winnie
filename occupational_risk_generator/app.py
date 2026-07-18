@@ -9,9 +9,16 @@ from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Pt
 
+from appendix8_case_retriever import (
+    build_reference_guidance,
+    find_similar_appendix8_cases,
+    format_case_match_summary,
+)
+
 
 APP_TITLE = "特約職護職業安全風險評估產生器"
 RULES_PATH = Path(__file__).with_name("risk_rules.json")
+APPENDIX8_CASES_PATH = Path(__file__).with_name("data") / "appendix8_training_examples_cleaned.xlsx"
 DEFAULT_ACCESS_PASSWORD = "666"
 
 
@@ -152,6 +159,15 @@ HEALTH_LABEL_KEYWORDS = ["高血壓", "血糖", "血脂", "肝功能", "貧血",
 def load_rules() -> dict:
     with RULES_PATH.open("r", encoding="utf-8") as file:
         return json.load(file)
+
+
+def find_reference_cases(form_data: dict) -> list[dict]:
+    if not APPENDIX8_CASES_PATH.exists():
+        return []
+    try:
+        return find_similar_appendix8_cases(form_data, APPENDIX8_CASES_PATH)
+    except Exception:
+        return []
 
 
 def normalize_text(value) -> str:
@@ -665,8 +681,16 @@ def generate_appendix_record(form_data: dict, rules_data: dict) -> tuple[str, li
     matched_rules = get_matched_rules(form_data, rules_data)
     context_notes = get_context_notes(form_data, rules_data)
     custom_health_risks = form_data.get("custom_health_risks", [])
+    similar_cases = find_reference_cases(form_data)
+    reference_guidance = build_reference_guidance(form_data, similar_cases)
 
-    if not matched_rules and not context_notes and not custom_health_risks and not has_special_hazard_level(form_data):
+    if (
+        not matched_rules
+        and not context_notes
+        and not custom_health_risks
+        and not has_special_hazard_level(form_data)
+        and not similar_cases
+    ):
         message = rules_data["insufficient_data_message"]
         return "\n\n".join(
             part
@@ -701,6 +725,11 @@ def generate_appendix_record(form_data: dict, rules_data: dict) -> tuple[str, li
     education_items.extend(custom_guidance["education"])
     improvement_items.extend(custom_guidance["improvements"])
     follow_up_items.extend(custom_guidance["follow_up"])
+    risk_items.extend(reference_guidance["risk"])
+    education_items.extend(reference_guidance["education"])
+    improvement_items.extend(reference_guidance["management"])
+    improvement_items.extend(reference_guidance["environment"])
+    follow_up_items.extend(reference_guidance["follow_up"])
     education_items.extend(special_hazard_guidance["education"])
     improvement_items.extend(special_hazard_guidance["management"])
     improvement_items.extend(special_hazard_guidance["environment"])
@@ -981,11 +1010,14 @@ def main() -> None:
         }
         if output_format == "附表八紀錄式":
             result_text, matched_rules = generate_appendix_record(form_data, rules_data)
+            case_matches = find_reference_cases(form_data)
         else:
             result_text, matched_rules = generate_recommendation(form_data, rules_data)
+            case_matches = []
         st.session_state["result_text"] = result_text
         st.session_state["form_data"] = form_data
         st.session_state["matched_rules"] = [rule["label"] for rule in matched_rules]
+        st.session_state["case_match_summary"] = format_case_match_summary(case_matches)
         st.session_state["output_format"] = output_format
 
     if "result_text" in st.session_state:
@@ -994,6 +1026,9 @@ def main() -> None:
             st.info("已套用規則：" + "、".join(st.session_state["matched_rules"]))
         else:
             st.warning(rules_data["insufficient_data_message"])
+        if st.session_state.get("output_format") == "附表八紀錄式":
+            with st.expander("相似案例檢索結果"):
+                st.write(st.session_state.get("case_match_summary", "未執行案例檢索。"))
 
         st.text_area("完整文字", st.session_state["result_text"], height=520)
         button_col1, button_col2 = st.columns([1, 2])
