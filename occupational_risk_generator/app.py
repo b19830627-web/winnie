@@ -437,6 +437,15 @@ def build_risk_focus(
                 "長期輪班與夜間工作會干擾生理時鐘，除造成慢性疲勞外，也可能增加腦心血管疾病及過勞相關風險。"
             )
 
+        has_management_work = any(
+            keyword in source_text
+            for keyword in ["管理", "管理職", "主管", "人員管理", "溝通協調", "行政管理", "一般管理"]
+        )
+        if has_management_work:
+            management_risk = "管理職需承擔決策、人員管理及溝通協調責任，可能因工作壓力、長工時、休息不足及久坐辦公，增加疲勞、心理負荷、肌肉骨骼不適及腦心血管疾病風險。"
+            if management_risk.rstrip("。") not in [part.rstrip("。") for part in parts]:
+                parts.append(management_risk)
+
         outcome_map = [
             (["久坐", "重複", "人因", "姿勢", "手部", "電腦"], "肌肉骨骼傷害"),
             (["噪音"], "聽力損失"),
@@ -445,7 +454,7 @@ def build_risk_focus(
             (["高溫", "熱"], "熱危害"),
             (["游離輻射", "輻射"], "游離輻射暴露危害"),
             (["外勤", "交通", "駕駛", "重機具"], "作業事故"),
-            (["監督", "工程進度", "品質管理", "安全管理", "人員協調"], "工作壓力、疲勞及判斷失誤"),
+            (["工地監督", "現場監督", "施工管理", "工程進度", "品質管理", "安全管理", "施工協調", "工安巡查"], "工作壓力、疲勞及判斷失誤"),
         ]
         outcomes = dedupe([
             outcome
@@ -453,13 +462,14 @@ def build_risk_focus(
             if any(keyword in source_text for keyword in keywords)
             and not (outcome == "肌肉骨骼傷害" and (has_standing or has_handling))
             and not (outcome == "心血管與疲勞負荷" and has_shift_work)
+            and not (outcome == "工作壓力、疲勞及判斷失誤" and has_management_work)
         ])
         if outcomes:
             parts.append(f"持續暴露於{exposure_text}，可能增加{'、'.join(outcomes)}風險。")
 
     for item in risk_detail_items or []:
         clean_item = strip_record_punctuation(item)
-        if clean_item and clean_item not in parts:
+        if clean_item and clean_item.rstrip("。") not in [part.rstrip("。") for part in parts]:
             parts.append(f"{clean_item}。")
 
     work_ability_level = normalize_text(form_data.get("work_ability_level"))
