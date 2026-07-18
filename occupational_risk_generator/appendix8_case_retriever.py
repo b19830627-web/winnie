@@ -311,7 +311,7 @@ def build_reference_guidance(form_data: dict, similar_cases: list[dict[str, Any]
     context = current_context_text(form_data, similar_cases)
     guidance = {"risk": [], "management": [], "environment": [], "education": [], "follow_up": []}
 
-    if text_has_any(context, ["工地", "營造", "現場巡檢", "工程", "監督"]):
+    if text_has_any(context, ["工地", "營造", "現場巡檢", "戶外巡檢", "施工", "工安巡查"]):
         guidance["risk"].append("本次作業涉及現場監督或工地管理，需留意戶外移動、工程進度壓力、臨時狀況處理及現場環境變化對疲勞與判斷力之影響。")
         guidance["management"].append("工作負荷與現場管理：建議依工程進度、巡視頻率及突發狀況處理需求，檢視工作分派、支援機制與休息安排。")
         guidance["follow_up"].append("追蹤現場監督、巡檢頻率、工時安排及突發狀況處理對疲勞與作業安全之影響。")
@@ -349,7 +349,12 @@ def build_reference_guidance(form_data: dict, similar_cases: list[dict[str, Any]
         guidance["environment"].append("建議確認濕式作業、局部排氣、清掃方式、粉塵逸散控制及呼吸防護具配置。")
         guidance["education"].append("提醒正確配戴合適呼吸防護具，避免乾掃造成二次揚塵，並留意咳嗽或呼吸道刺激症狀。")
 
-    if text_has_any(context, ["溝通", "協調", "壓力", "心理", "跨部門"]):
+    has_management_role = text_has_any(context, ["管理", "管理職", "主管", "人員管理", "溝通協調", "行政管理", "一般管理"])
+    if has_management_role:
+        guidance["risk"].append("管理職需承擔決策、人員管理及溝通協調責任，可能因工作壓力、長工時、休息不足及久坐辦公，增加疲勞、心理負荷、肌肉骨骼不適及腦心血管疾病風險。")
+        guidance["management"].append("工作負荷與壓力管理：建議合理分配工作與責任，建立明確溝通及支援機制，並安排適當休息。")
+        guidance["education"].append("提供壓力調適、工作節奏安排、久坐辦公伸展及異常疲勞警訊辨識之指導。")
+    elif text_has_any(context, ["溝通", "協調", "壓力", "心理", "跨部門"]):
         guidance["risk"].append("工作需頻繁溝通、協調或處理突發事項時，可能增加心理壓力、疲勞累積及注意力下降風險。")
         guidance["management"].append("工作負荷與壓力管理：建議合理分配工作與責任，建立明確溝通及支援機制，並安排適當休息。")
         guidance["education"].append("提供壓力調適、工作節奏安排及異常疲勞警訊辨識之指導。")
